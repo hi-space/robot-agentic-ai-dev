@@ -69,15 +69,15 @@ const MessageContainer = styled(Paper, {
   padding: '12px 16px',
   borderRadius: isUser ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
   backgroundColor: isUser ? 'transparent' : 'transparent',
-  background: isUser 
-    ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' 
+  background: isUser
+    ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)'
     : 'linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)',
   color: isUser ? 'white' : theme.palette.text.primary,
   maxWidth: '100%',
   marginBottom: '8px',
   wordWrap: 'break-word',
   border: isUser ? 'none' : `1px solid rgba(226, 232, 240, 0.8)`,
-  boxShadow: isUser 
+  boxShadow: isUser
     ? '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
     : '0 2px 4px -1px rgba(0, 0, 0, 0.06)',
   position: 'relative',
@@ -151,7 +151,7 @@ const ErrorContainer = styled(Box)(({ theme }) => ({
 }))
 
 const StreamingText = styled(Typography)({
-  minHeight: '1.2em', 
+  minHeight: '1.2em',
 })
 
 // 키프레임 애니메이션 정의
@@ -164,7 +164,7 @@ const keyframes = `
 
 function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, onTTSStop, ttsStatus }: StreamingMessageProps) {
   const theme = useTheme()
-  
+
   // tool_use 메시지는 기본적으로 펼쳐져 있도록 설정
   const [isExpanded, setIsExpanded] = useState(true)
   const [displayText, setDisplayText] = useState('')
@@ -175,7 +175,7 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
     const style = document.createElement('style')
     style.textContent = keyframes
     document.head.appendChild(style)
-    
+
     return () => {
       document.head.removeChild(style)
     }
@@ -183,13 +183,13 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
 
   // 스트리밍 상태 결정
   const isStreaming = message.type === 'chunk' && !message.isComplete
-  
+
   // 메시지 데이터가 변경될 때마다 displayText 업데이트 (깜빡거림 방지)
   useEffect(() => {
-    const newDisplayText = message.type === 'complete' && message.final_response 
-      ? message.final_response 
+    const newDisplayText = message.type === 'complete' && message.final_response
+      ? message.final_response
       : message.data || ''
-    
+
     if (newDisplayText !== displayText) {
       setDisplayText(newDisplayText)
     }
@@ -199,14 +199,14 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
   useEffect(() => {
     if (message.type === 'tool_use') {
       let newToolInput = message.tool_input
-      
-      console.log('Tool input update:', { 
-        tool_input: message.tool_input, 
-        newToolInput, 
+
+      console.log('Tool input update:', {
+        tool_input: message.tool_input,
+        newToolInput,
         displayToolInput,
-        messageId: message.id 
+        messageId: message.id
       })
-      
+
       if (newToolInput !== displayToolInput) {
         setDisplayToolInput(newToolInput)
       }
@@ -226,10 +226,40 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
     return data
   }
 
+  // 이미지와 메타데이터 추출 함수
+  const extractImageData = (data: any): Array<{ url: string, metadata: any }> => {
+    const imageData: Array<{ url: string, metadata: any }> = []
+
+    if (!data) return imageData
+
+    const parsedData = parseJSONSafely(data)
+
+    // messages 배열에서 image_url과 메타데이터 추출
+    if (parsedData?.messages && Array.isArray(parsedData.messages)) {
+      parsedData.messages.forEach((msg: any) => {
+        if (msg.image_url) {
+          imageData.push({
+            url: msg.image_url,
+            metadata: {
+              timestamp: msg.timestamp,
+              results: msg.results,
+              filename: msg.filename,
+            }
+          })
+        }
+      })
+    }
+
+    return imageData
+  }
+
   // 도구 사용 정보 렌더링
   const renderToolUse = () => {
     // toolInput이 없거나 비어있으면 접힌 상태로 시작
     const hasToolInput = displayToolInput && displayToolInput !== '' && displayToolInput !== null && displayToolInput !== undefined
+
+    // 이미지 데이터 추출
+    const imageData = extractImageData(displayToolInput)
 
     return (
       <ToolUseContainer>
@@ -245,24 +275,24 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
               </Typography>
             )}
           </Box>
-          <Chip 
-            label={message.isComplete ? "완료" : "실행중"} 
-            size="small" 
-            sx={{ 
-              background: message.isComplete 
-                ? 'rgba(16, 185, 129, 0.1)' 
+          <Chip
+            label={message.isComplete ? "완료" : "실행중"}
+            size="small"
+            sx={{
+              background: message.isComplete
+                ? 'rgba(16, 185, 129, 0.1)'
                 : 'rgba(99, 102, 241, 0.1)',
-              color: message.isComplete 
+              color: message.isComplete
                 ? theme.palette.success.main
                 : theme.palette.primary.main,
-              border: message.isComplete 
+              border: message.isComplete
                 ? '1px solid rgba(16, 185, 129, 0.3)'
                 : '1px solid rgba(99, 102, 241, 0.3)',
               borderRadius: 8,
               fontWeight: 600,
               fontSize: '0.75rem',
               '& .MuiChip-label': {
-                color: message.isComplete 
+                color: message.isComplete
                   ? theme.palette.success.main
                   : theme.palette.primary.main,
                 fontWeight: 600,
@@ -273,7 +303,7 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
             <IconButton
               size="small"
               onClick={() => setIsExpanded(!isExpanded)}
-              sx={{ 
+              sx={{
                 ml: 'auto',
                 color: theme.palette.text.secondary,
                 '&:hover': {
@@ -286,6 +316,81 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
             </IconButton>
           )}
         </Box>
+
+        {/* 이미지 렌더링 - 각 detection 결과별로 구분 */}
+        {imageData.length > 0 && (
+          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {imageData.map((item, index) => (
+              <Box
+                key={index}
+                sx={{
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                  border: '1px solid rgba(226, 232, 240, 0.8)',
+                  background: 'white',
+                }}
+              >
+                {/* 메타데이터 헤더 */}
+                {item.metadata.results && item.metadata.results.length > 0 && (
+                  <Box sx={{
+                    p: 1.5,
+                    background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+                    borderBottom: '1px solid rgba(226, 232, 240, 0.8)',
+                  }}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+                      <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                        Detection #{index + 1}
+                      </Typography>
+                      {item.metadata.results.map((result: any, rIndex: number) => (
+                        <Chip
+                          key={rIndex}
+                          label={`${result.class || 'unknown'} (${(result.confidence * 100).toFixed(1)}%)`}
+                          size="small"
+                          sx={{
+                            fontSize: '0.7rem',
+                            height: '20px',
+                            background: result.risk_level === 'HIGH'
+                              ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+                              : result.risk_level === 'MEDIUM'
+                                ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                                : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            color: 'white',
+                            fontWeight: 600,
+                          }}
+                        />
+                      ))}
+                      {item.metadata.timestamp && (
+                        <Typography variant="caption" sx={{ ml: 'auto', color: 'text.secondary' }}>
+                          {new Date(item.metadata.timestamp * 1000).toLocaleTimeString('ko-KR')}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+
+                {/* 이미지 */}
+                <Box sx={{ p: 1 }}>
+                  <img
+                    src={item.url}
+                    alt={`Detection ${index + 1}`}
+                    style={{
+                      width: '100%',
+                      maxHeight: '400px',
+                      display: 'block',
+                      objectFit: 'contain',
+                    }}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement
+                      target.style.display = 'none'
+                    }}
+                  />
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        )}
+
         {hasToolInput && (
           <Collapse in={isExpanded}>
             <Box className="tool-content">
@@ -320,7 +425,7 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
         <IconButton
           size="small"
           onClick={() => setIsExpanded(!isExpanded)}
-          sx={{ 
+          sx={{
             color: 'white',
             '&:hover': {
               backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -375,9 +480,9 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
       case 'complete':
         return (
           <Box>
-            <StreamingText 
-              variant="body1" 
-              sx={{ 
+            <StreamingText
+              variant="body1"
+              sx={{
                 lineHeight: 1.5,
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word'
@@ -391,9 +496,9 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
       case 'chunk':
       default:
         return (
-          <StreamingText 
-            variant="body1" 
-            sx={{ 
+          <StreamingText
+            variant="body1"
+            sx={{
               lineHeight: 1.5,
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word'
@@ -407,13 +512,13 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
 
   // 사용자 메시지인지 확인 (간단한 텍스트인 경우)
   const isSimpleUserMessage = isUser && message.type === 'chunk' && !message.tool_name && !message.reasoning_text && !message.error
-  
+
   // tool_use, reasoning, error 타입은 자체 스타일링이 있으므로 추가 박스 불필요
   const hasCustomStyling = message.type === 'tool_use' || message.type === 'reasoning' || message.type === 'error'
-  
+
   // TTS 가능한 메시지인지 확인 (AI 응답이고 텍스트가 있고 TTS가 활성화된 경우)
   const canUseTTS = !isUser && (message.type === 'chunk' || message.type === 'complete') && displayText.trim() && ttsStatus?.isEnabled
-  
+
   // 현재 메시지가 TTS로 재생 중인지 확인 (TTS가 활성화된 경우에만)
   const isCurrentTTSMessage = ttsStatus?.isEnabled && ttsStatus?.currentText === displayText && ttsStatus?.hasAudio
 
@@ -427,9 +532,9 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
     >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, maxWidth: '85%' }}>
         {!isUser && (
-          <Avatar sx={{ 
-            width: 32, 
-            height: 32, 
+          <Avatar sx={{
+            width: 32,
+            height: 32,
             background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
           }}>
@@ -447,15 +552,15 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
             renderContent()
           ) : (
             // 일반 AI 메시지는 더 깔끔한 스타일로 표시
-            <Box sx={{ 
-              p: 2, 
-              background: isUser 
-                ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' 
+            <Box sx={{
+              p: 2,
+              background: isUser
+                ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)'
                 : 'linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)',
               color: isUser ? 'white' : 'text.primary',
               borderRadius: isUser ? '20px 20px 4px 20px' : 0,
               border: isUser ? 'none' : '1px solid rgba(226, 232, 240, 0.8)',
-              boxShadow: isUser 
+              boxShadow: isUser
                 ? '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
                 : '0 2px 4px -1px rgba(0, 0, 0, 0.06)',
               wordWrap: 'break-word',
@@ -464,23 +569,23 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
             </Box>
           )}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
-            <Typography 
-              variant="caption" 
-              color="text.secondary" 
-              sx={{ 
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{
                 ml: isUser ? 0 : 1,
                 mr: isUser ? 1 : 0,
                 fontSize: '0.75rem'
               }}
             >
-              {message.timestamp.toLocaleTimeString('ko-KR', { 
-                hour: '2-digit', 
-                minute: '2-digit', 
+              {message.timestamp.toLocaleTimeString('ko-KR', {
+                hour: '2-digit',
+                minute: '2-digit',
                 second: '2-digit',
-                hour12: false 
+                hour12: false
               })}
             </Typography>
-            
+
             {/* TTS 버튼들 - TTS가 활성화된 경우에만 표시 */}
             {canUseTTS && onTTSPlay && ttsStatus?.isEnabled && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -489,7 +594,7 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
                     <IconButton
                       size="small"
                       onClick={onTTSPause}
-                      sx={{ 
+                      sx={{
                         color: 'warning.main',
                         '&:hover': { backgroundColor: 'rgba(245, 158, 11, 0.1)' }
                       }}
@@ -502,7 +607,7 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
                     <IconButton
                       size="small"
                       onClick={() => onTTSPlay(displayText)}
-                      sx={{ 
+                      sx={{
                         color: isCurrentTTSMessage ? 'primary.main' : 'text.secondary',
                         '&:hover': { backgroundColor: 'rgba(99, 102, 241, 0.1)' }
                       }}
@@ -511,13 +616,13 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
                     </IconButton>
                   </Tooltip>
                 )}
-                
+
                 {isCurrentTTSMessage && ttsStatus?.hasAudio && (
                   <Tooltip title="정지">
                     <IconButton
                       size="small"
                       onClick={onTTSStop}
-                      sx={{ 
+                      sx={{
                         color: 'error.main',
                         '&:hover': { backgroundColor: 'rgba(239, 68, 68, 0.1)' }
                       }}
@@ -526,7 +631,7 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
                     </IconButton>
                   </Tooltip>
                 )}
-                
+
                 {isCurrentTTSMessage && ttsStatus?.isPlaying && (
                   <VolumeUp sx={{ fontSize: '0.875rem', color: 'success.main' }} />
                 )}
@@ -544,15 +649,15 @@ export default memo(StreamingMessage, (prevProps, nextProps) => {
   // 메시지 내용이 동일한지 확인
   const prevMessage = prevProps.message
   const nextMessage = nextProps.message
-  
+
   // TTS 상태 변경 시 리렌더링 필요
-  const ttsStatusChanged = 
+  const ttsStatusChanged =
     prevProps.ttsStatus?.isEnabled !== nextProps.ttsStatus?.isEnabled ||
     prevProps.ttsStatus?.isPlaying !== nextProps.ttsStatus?.isPlaying ||
     prevProps.ttsStatus?.isPaused !== nextProps.ttsStatus?.isPaused ||
     prevProps.ttsStatus?.hasAudio !== nextProps.ttsStatus?.hasAudio ||
     prevProps.ttsStatus?.currentText !== nextProps.ttsStatus?.currentText
-  
+
   return (
     prevMessage.id === nextMessage.id &&
     prevMessage.type === nextMessage.type &&
