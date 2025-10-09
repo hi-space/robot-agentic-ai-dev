@@ -3,14 +3,94 @@ from datetime import datetime
 import json
 import boto3
 import os
+import time
 from typing import Optional, List, Dict, Any
 from utils.s3_util import download_image_from_s3
 
 
+def _add_presigned_urls_to_messages(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Helper function to add presigned URLs to messages containing S3 paths.
+    
+    Args:
+        result: Dictionary containing messages with S3 file paths
+        
+    Returns:
+        Updated dictionary with presigned URLs added to messages
+    """
+    if "messages" not in result:
+        return result
+    
+    try:
+        s3_client = boto3.client('s3', region_name='ap-northeast-2')
+        
+        for msg in result["messages"]:
+            if "filename" in msg and msg["filename"].startswith("s3://"):
+                try:
+                    # Extract bucket and key from S3 path
+                    s3_path = msg["filename"].replace("s3://", "")
+                    parts = s3_path.split("/", 1)
+                    if len(parts) == 2:
+                        bucket, key = parts
+                        # Generate presigned URL (valid for 1 hour)
+                        presigned_url = s3_client.generate_presigned_url(
+                            'get_object',
+                            Params={'Bucket': bucket, 'Key': key},
+                            ExpiresIn=3600
+                        )
+                        msg["image_url"] = presigned_url
+                except Exception as e:
+                    print(f"Error generating presigned URL for {msg['filename']}: {e}")
+                    # Continue without image URL if generation fails
+    except Exception as e:
+        print(f"Error creating S3 client: {e}")
+    
+    return result
+
+
+def _clear_queue(queue_name: str, config: dict, sqs_client=None) -> None:
+    """Helper function to clear all messages from SQS FIFO queue.
+    
+    Args:
+        queue_name: Name of the FIFO queue (without .fifo suffix)
+        config: Configuration dictionary containing accountId
+        sqs_client: Optional SQS client (creates new one if not provided)
+    """
+    try:
+        region = "ap-northeast-2"
+        account_id = config['accountId']
+        
+        if sqs_client is None:
+            sqs_client = boto3.client('sqs', region_name=region)
+        
+        queue_url = f"https://sqs.{region}.amazonaws.com/{account_id}/{queue_name}.fifo"
+        
+        # Clear all messages in the queue
+        while True:
+            response = sqs_client.receive_message(
+                QueueUrl=queue_url,
+                MaxNumberOfMessages=10,
+                WaitTimeSeconds=0
+            )
+            messages = response.get('Messages', [])
+            if not messages:
+                break
+            
+            # Delete all messages
+            for message in messages:
+                try:
+                    sqs_client.delete_message(
+                        QueueUrl=queue_url,
+                        ReceiptHandle=message['ReceiptHandle']
+                    )
+                except Exception as e:
+                    print(f"Warning: Could not delete message {message['MessageId']}: {e}")
+    except Exception as e:
+        print(f"Warning: Error clearing queue: {e}")
+
+
 def _get_fifo_messages(queue_name: str, config: dict) -> Dict[str, Any]:
-    """Helper function to get messages from SQS FIFO queue.
-    Reads only the latest 3 messages, filters out messages older than 3 minutes,
-    and clears the queue after processing.
+    """Helper function to get NEW messages from SQS FIFO queue.
+    Clears the queue first, then waits for new messages (max 5 seconds).
     
     Args:
         queue_name: Name of the FIFO queue (without .fifo suffix)
@@ -40,111 +120,85 @@ def _get_fifo_messages(queue_name: str, config: dict) -> Dict[str, Any]:
     except Exception as e:
         return {"error": f"Cannot access SQS queue: {e}. Please check queue name, AWS credentials, and permissions."}
     
-    # Get current timestamp for filtering
+    # Step 1: Clear all old messages from the queue
+    print(f"Clearing old messages from {queue_name} queue...")
+    _clear_queue(queue_name, config, sqs)
+    
+    # Step 2: Wait for new messages (max 5 seconds, check every 1 second)
+    print(f"Waiting for new messages from {queue_name} queue...")
+    max_attempts = 5
     current_time = datetime.now()
-    three_minutes_ago = current_time.timestamp() - (3 * 60)  # 3 minutes in seconds
     
-    # Receive only the latest 3 messages from SQS
-    try:
-        response = sqs.receive_message(
-            QueueUrl=queue_url,
-            MaxNumberOfMessages=3,  # Changed from 10 to 3
-            WaitTimeSeconds=0,  # Non-blocking for tool usage
-            MessageAttributeNames=['All']
-        )
-    except Exception as e:
-        return {"error": f"Error receiving messages: {e}"}
-    
-    messages = response.get('Messages', [])
-    
-    if not messages:
-        return {
-            "status": "no_messages",
-            "message": f"No messages available in the {queue_name} queue",
-            "timestamp": current_time.isoformat()
-        }
-    
-    # Process messages and filter by timestamp
-    processed_messages = []
-    messages_to_delete = []  # Track all messages for deletion
-    
-    for message in messages:
+    for attempt in range(max_attempts):
+        # Wait 1 second before checking
+        time.sleep(1)
+        
+        # Try to receive new messages
         try:
-            # Parse message body
-            message_body = json.loads(message['Body'])
-            
-            # Check if message has a timestamp and filter by 3-minute rule
-            message_timestamp = None
-            if isinstance(message_body, dict) and 'timestamp' in message_body:
-                try:
-                    # Parse timestamp from message
-                    message_timestamp = datetime.fromisoformat(str(message_body['timestamp']).replace('Z', '+00:00'))
-                    message_timestamp_seconds = message_timestamp.timestamp()
-                    
-                    # Skip message if it's older than 3 minutes
-                    if message_timestamp_seconds < three_minutes_ago:
-                        print(f"Skipping message {message['MessageId']} - older than 3 minutes")
-                        # Still add to deletion list to clear the queue
-                        messages_to_delete.append(message)
-                        continue
-
-                except (ValueError, TypeError) as e:
-                    print(f"Warning: Could not parse timestamp from message {message['MessageId']}: {e}")
-                    # Continue processing if timestamp parsing fails
-            
-            # Add message_id to the original message format
-            message_body["message_id"] = message['MessageId']
-            processed_messages.append(message_body)
-            messages_to_delete.append(message)
-                
-        except json.JSONDecodeError:
-            # Handle non-JSON messages - add message_id to raw message
-            raw_message = {
-                "message_id": message['MessageId'],
-                "raw_body": message['Body']
-            }
-            processed_messages.append(raw_message)
-            messages_to_delete.append(message)
-    
-    # Delete all processed messages to clear the queue
-    for message in messages_to_delete:
-        try:
-            sqs.delete_message(
-                QueueUrl=queue_url,
-                ReceiptHandle=message['ReceiptHandle']
-            )
-        except Exception as e:
-            print(f"Warning: Could not delete message {message['MessageId']}: {e}")
-    
-    # Clear any remaining messages in the queue
-    try:
-        while True:
             response = sqs.receive_message(
                 QueueUrl=queue_url,
-                MaxNumberOfMessages=10,
-                WaitTimeSeconds=0
+                MaxNumberOfMessages=3,
+                WaitTimeSeconds=0,
+                MessageAttributeNames=['All']
             )
-            remaining_messages = response.get('Messages', [])
-            if not remaining_messages:
-                break
+        except Exception as e:
+            return {"error": f"Error receiving messages: {e}"}
+        
+        messages = response.get('Messages', [])
+        
+        if messages:
+            # Found new messages! Process them
+            print(f"Found {len(messages)} new message(s) on attempt {attempt + 1}")
+            processed_messages = []
             
-            # Delete remaining messages
-            for message in remaining_messages:
+            for message in messages:
                 try:
-                    sqs.delete_message(
-                        QueueUrl=queue_url,
-                        ReceiptHandle=message['ReceiptHandle']
-                    )
-                except Exception as e:
-                    print(f"Warning: Could not delete remaining message {message['MessageId']}: {e}")
-    except Exception as e:
-        print(f"Warning: Error clearing remaining messages: {e}")
+                    # Parse message body
+                    message_body = json.loads(message['Body'])
+                    
+                    # Add message_id to the original message format
+                    message_body["message_id"] = message['MessageId']
+                    processed_messages.append(message_body)
+                    
+                    # Delete the message after processing
+                    try:
+                        sqs.delete_message(
+                            QueueUrl=queue_url,
+                            ReceiptHandle=message['ReceiptHandle']
+                        )
+                    except Exception as e:
+                        print(f"Warning: Could not delete message {message['MessageId']}: {e}")
+                        
+                except json.JSONDecodeError:
+                    # Handle non-JSON messages
+                    raw_message = {
+                        "message_id": message['MessageId'],
+                        "raw_body": message['Body']
+                    }
+                    processed_messages.append(raw_message)
+                    
+                    # Delete the message
+                    try:
+                        sqs.delete_message(
+                            QueueUrl=queue_url,
+                            ReceiptHandle=message['ReceiptHandle']
+                        )
+                    except Exception as e:
+                        print(f"Warning: Could not delete message {message['MessageId']}: {e}")
+            
+            return {
+                "status": "success",
+                "message_count": len(processed_messages),
+                "timestamp": current_time.isoformat(),
+                "messages": processed_messages
+            }
     
+    # No messages received within 5 seconds
+    print(f"No new messages received from {queue_name} queue after {max_attempts} seconds")
     return {
-        "status": "success",
-        "message_count": len(processed_messages),
-        "timestamp": current_time.isoformat(),
-        "messages": processed_messages
+        "status": "no_messages",
+        "message": f"No messages available in the {queue_name} queue",
+        "timestamp": current_time.isoformat()
     }
 
 
@@ -215,6 +269,9 @@ def get_robot_detection():
         if "error" in result:
             return result
         
+        # Add presigned image URLs to messages
+        result = _add_presigned_urls_to_messages(result)
+        
         return result
         
     except Exception as e:
@@ -253,6 +310,9 @@ def get_robot_gesture():
         
         if "error" in result:
             return result
+        
+        # Add presigned image URLs to messages
+        result = _add_presigned_urls_to_messages(result)
         
         return result
         
