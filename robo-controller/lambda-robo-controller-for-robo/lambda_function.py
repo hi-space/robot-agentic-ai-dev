@@ -21,8 +21,8 @@ def command_robot(action: str, message: str, debug: bool = False) -> str:
         move = ['detected']
     elif action == "from1to2":
         move = ['from1to2']
-    elif action == "from3to0":
-        move = ['from3to0']
+    elif action == "from2to0":
+        move = ['from2to0']
     elif action == "from0to1":
         move = ['from0to1']
     elif action == "normal":
