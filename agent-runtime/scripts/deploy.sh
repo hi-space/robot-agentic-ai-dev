@@ -159,11 +159,23 @@ launch_agent() {
     
     # Launch with explicit environment variable passing
     # Note: GATEWAY_URL and BEARER_TOKEN are now loaded from config.json
-    COGNITO_CLIENT_ID="$COGNITO_CLIENT_ID" \
-    COGNITO_USERNAME="$COGNITO_USERNAME" \
-    COGNITO_PASSWORD="$COGNITO_PASSWORD" \
-    SECRET_NAME="$SECRET_NAME" \
-    agentcore launch
+    # COGNITO_CLIENT_ID="$COGNITO_CLIENT_ID" \
+    # COGNITO_USERNAME="$COGNITO_USERNAME" \
+    # COGNITO_PASSWORD="$COGNITO_PASSWORD" \
+    # SECRET_NAME="$SECRET_NAME" \
+    # agentcore launch
+    
+    # Launch with explicit environment variable passing using --env flag
+    agentcore launch \
+        --env AWS_REGION="$AWS_REGION" \
+        --env BEARER_TOKEN="" \
+        --env BEDROCK_AGENTCORE_MEMORY_ID="robot_strands_agent_mem-TsyiOq98gD" \
+        --env BEDROCK_AGENTCORE_MEMORY_NAME="robot_strands_agent_mem" \
+        --env COGNITO_CLIENT_ID="$COGNITO_CLIENT_ID" \
+        --env COGNITO_PASSWORD="$COGNITO_PASSWORD" \
+        --env COGNITO_USERNAME="$COGNITO_USERNAME" \
+        --env GATEWAY_URL="$GATEWAY_URL" \
+        --env SECRET_NAME="$SECRET_NAME"
     
     print_success "Agent launch initiated"
 }
