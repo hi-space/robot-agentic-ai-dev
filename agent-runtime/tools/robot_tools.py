@@ -124,9 +124,9 @@ def _get_fifo_messages(queue_name: str, config: dict) -> Dict[str, Any]:
     print(f"Clearing old messages from {queue_name} queue...")
     _clear_queue(queue_name, config, sqs)
     
-    # Step 2: Wait for new messages (max 5 seconds, check every 1 second)
+    # Step 2: Wait for new messages ({max_attempts} seconds, check every 1 second)
     print(f"Waiting for new messages from {queue_name} queue...")
-    max_attempts = 5
+    max_attempts = 10
     current_time = datetime.now()
     
     for attempt in range(max_attempts):
