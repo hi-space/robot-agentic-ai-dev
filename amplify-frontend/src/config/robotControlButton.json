@@ -15,16 +15,9 @@
       "color": "primary"
     },
     {
-      "text": "2-3",
-      "action": "from2to3",
-      "message": "포인트 2에서 3로 이동합니다",
-      "icon": "Navigation",
-      "color": "primary"
-    },
-    {
-      "text": "3-0",
-      "action": "from3to0",
-      "message": "포인트 3에서 0으로 이동합니다",
+      "text": "2-0",
+      "action": "from2to0",
+      "message": "포인트 2에서 0으로 이동합니다",
       "icon": "Navigation",
       "color": "primary"
     },
