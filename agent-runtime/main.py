@@ -9,7 +9,8 @@ from utils.logger import LoggerSetup
 
 # Initialize configuration and logging
 config = Config.from_config_file()
-logger = LoggerSetup.setup_logging()
+LoggerSetup.setup_logging()
+logger = logging.getLogger(__name__)
 app = BedrockAgentCoreApp()
 
 # Initialize managers
