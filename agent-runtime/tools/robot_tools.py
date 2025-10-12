@@ -327,6 +327,35 @@ def get_robot_gesture():
 
 
 @tool
+def wait_for_seconds(seconds: int) -> str:
+    """에이전트가 지정된 시간(초) 동안 대기합니다.
+    
+    사용자가 "3초 대기", "5초 기다려", "10초 후에 확인" 등의 요청을 할 때 사용합니다.
+    
+    Args:
+        seconds: 대기할 시간(초). 1초에서 60초 사이의 값을 권장합니다.
+    
+    Returns:
+        대기 완료 메시지
+    """
+    if seconds < 0:
+        return "오류: 대기 시간은 0보다 커야 합니다."
+    
+    if seconds > 300:  # 5분 이상은 경고
+        return f"경고: {seconds}초는 너무 긴 시간입니다. 최대 300초(5분)를 권장합니다."
+    
+    logger.info(f"Waiting for {seconds} seconds...")
+    start_time = datetime.now()
+    
+    time.sleep(seconds)
+    
+    end_time = datetime.now()
+    elapsed = (end_time - start_time).total_seconds()
+    
+    return f"{seconds}초 대기 완료 (실제 경과 시간: {elapsed:.2f}초)"
+
+
+@tool
 def analyze_robot_image(image_path: str) -> str:
     """Analyze a specific robot image from S3 using Bedrock Converse API.
     
