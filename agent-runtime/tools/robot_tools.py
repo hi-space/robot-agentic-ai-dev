@@ -4,8 +4,11 @@ import json
 import boto3
 import os
 import time
+import logging
 from typing import Optional, List, Dict, Any
 from utils.s3_util import download_image_from_s3
+
+logger = logging.getLogger(__name__)
 
 
 def _add_presigned_urls_to_messages(result: Dict[str, Any]) -> Dict[str, Any]:
@@ -39,10 +42,10 @@ def _add_presigned_urls_to_messages(result: Dict[str, Any]) -> Dict[str, Any]:
                         )
                         msg["image_url"] = presigned_url
                 except Exception as e:
-                    print(f"Error generating presigned URL for {msg['filename']}: {e}")
+                    logger.warning(f"Error generating presigned URL for {msg['filename']}: {e}")
                     # Continue without image URL if generation fails
     except Exception as e:
-        print(f"Error creating S3 client: {e}")
+        logger.error(f"Error creating S3 client: {e}")
     
     return result
 
@@ -83,9 +86,9 @@ def _clear_queue(queue_name: str, config: dict, sqs_client=None) -> None:
                         ReceiptHandle=message['ReceiptHandle']
                     )
                 except Exception as e:
-                    print(f"Warning: Could not delete message {message['MessageId']}: {e}")
+                    logger.warning(f"Could not delete message {message['MessageId']}: {e}")
     except Exception as e:
-        print(f"Warning: Error clearing queue: {e}")
+        logger.warning(f"Error clearing queue: {e}")
 
 
 def _get_fifo_messages(queue_name: str, config: dict) -> Dict[str, Any]:
@@ -121,11 +124,11 @@ def _get_fifo_messages(queue_name: str, config: dict) -> Dict[str, Any]:
         return {"error": f"Cannot access SQS queue: {e}. Please check queue name, AWS credentials, and permissions."}
     
     # Step 1: Clear all old messages from the queue
-    print(f"Clearing old messages from {queue_name} queue...")
+    logger.info(f"Clearing old messages from {queue_name} queue...")
     _clear_queue(queue_name, config, sqs)
     
     # Step 2: Wait for new messages ({max_attempts} seconds, check every 1 second)
-    print(f"Waiting for new messages from {queue_name} queue...")
+    logger.info(f"Waiting for new messages from {queue_name} queue...")
     max_attempts = 10
     current_time = datetime.now()
     
@@ -148,7 +151,7 @@ def _get_fifo_messages(queue_name: str, config: dict) -> Dict[str, Any]:
         
         if messages:
             # Found new messages! Process them
-            print(f"Found {len(messages)} new message(s) on attempt {attempt + 1}")
+            logger.info(f"Found {len(messages)} new message(s) on attempt {attempt + 1}")
             processed_messages = []
             
             for message in messages:
@@ -167,7 +170,7 @@ def _get_fifo_messages(queue_name: str, config: dict) -> Dict[str, Any]:
                             ReceiptHandle=message['ReceiptHandle']
                         )
                     except Exception as e:
-                        print(f"Warning: Could not delete message {message['MessageId']}: {e}")
+                        logger.warning(f"Could not delete message {message['MessageId']}: {e}")
                         
                 except json.JSONDecodeError:
                     # Handle non-JSON messages
@@ -184,7 +187,7 @@ def _get_fifo_messages(queue_name: str, config: dict) -> Dict[str, Any]:
                             ReceiptHandle=message['ReceiptHandle']
                         )
                     except Exception as e:
-                        print(f"Warning: Could not delete message {message['MessageId']}: {e}")
+                        logger.warning(f"Could not delete message {message['MessageId']}: {e}")
             
             return {
                 "status": "success",
@@ -194,7 +197,7 @@ def _get_fifo_messages(queue_name: str, config: dict) -> Dict[str, Any]:
             }
     
     # No messages received within 5 seconds
-    print(f"No new messages received from {queue_name} queue after {max_attempts} seconds")
+    logger.info(f"No new messages received from {queue_name} queue after {max_attempts} seconds")
     return {
         "status": "no_messages",
         "message": f"No messages available in the {queue_name} queue",
