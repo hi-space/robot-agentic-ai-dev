@@ -1,7 +1,10 @@
 import json
+import logging
 from dataclasses import dataclass
 from typing import Optional
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -22,8 +25,8 @@ class Config:
             with open(config_path, 'r') as f:
                 config_data = json.load(f)
             
-            print(f"DEBUG: Loaded config from {config_path}")
-            print(f"DEBUG: Gateway URL from config: {config_data.get('gateway_url', 'NOT_FOUND')}")
+            logger.info(f"Loaded config from {config_path}")
+            logger.info(f"Gateway URL from config: {config_data.get('gateway_url', 'NOT_FOUND')}")
             
             return cls(
                 mcp_server_url=config_data.get("gateway_url", ""),
@@ -32,8 +35,8 @@ class Config:
             )
             
         except FileNotFoundError:
-            print(f"ERROR: config.json not found at {config_path}")
+            logger.error(f"config.json not found at {config_path}")
             return cls(mcp_server_url="")
         except json.JSONDecodeError as e:
-            print(f"ERROR: Invalid JSON in config.json: {e}")
+            logger.error(f"Invalid JSON in config.json: {e}")
             return cls(mcp_server_url="")
