@@ -192,24 +192,31 @@ check_status() {
         
         local status_output
         if status_output=$(agentcore status 2>&1); then
-            local status=$(echo "$status_output" | jq -r '.endpoint.status // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")
-            
-            case "$status" in
-                "READY")
-                    print_success "Deployment completed successfully!"
-                    local endpoint_url=$(echo "$status_output" | jq -r '.endpoint.endpoint_url // "N/A"' 2>/dev/null || echo "N/A")
-                    print_success "Runtime endpoint: $endpoint_url"
-                    return 0
-                    ;;
-                "CREATE_FAILED"|"DELETE_FAILED"|"UPDATE_FAILED")
-                    print_error "Deployment failed with status: $status"
-                    return 1
-                    ;;
-                *)
-                    print_status "Current status: $status (waiting...)"
-                    sleep 10
-                    ;;
-            esac
+            # Parse status from text output (more reliable than JSON with control characters)
+            if echo "$status_output" | grep -qi "Ready.*Agent deployed"; then
+                print_success "Deployment completed successfully!"
+                print_success "Agent is READY and deployed"
+                
+                # Try to extract agent info from verbose output
+                local verbose_output=$(agentcore status -v 2>&1 | tr -d '\000-\037' 2>/dev/null || echo "{}")
+                local agent_id=$(echo "$verbose_output" | jq -r '.agent.agentRuntimeId // ""' 2>/dev/null || echo "")
+                
+                if [[ -n "$agent_id" ]]; then
+                    print_success "Agent ID: $agent_id"
+                fi
+                
+                return 0
+            elif echo "$status_output" | grep -qi "failed"; then
+                print_error "Deployment failed"
+                echo "$status_output"
+                return 1
+            elif echo "$status_output" | grep -qi "creating\|updating\|pending"; then
+                print_status "Current status: Creating/Updating (waiting...)"
+                sleep 10
+            else
+                print_status "Current status: Unknown (waiting...)"
+                sleep 10
+            fi
         else
             print_warning "Status check failed, retrying in 10 seconds..."
             sleep 10
