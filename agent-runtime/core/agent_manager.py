@@ -6,7 +6,7 @@ from config.config import Config
 from core.mcp_manager import MCPServerManager
 from prompts.prompt import ORCHESTRATOR_PROMPT
 from tools.observer_env_agent import observe_env_agent
-from tools.robot_tools import get_robot_feedback, get_robot_detection, get_robot_gesture
+from tools.robot_tools import get_robot_feedback, get_robot_detection, get_robot_gesture, wait_for_seconds
 
 
 class AgentManager:
@@ -27,7 +27,8 @@ class AgentManager:
             local_tools = [
                 get_robot_feedback,
                 get_robot_detection,
-                get_robot_gesture
+                get_robot_gesture,
+                wait_for_seconds
             ]
             
             if debug:
