@@ -28,12 +28,12 @@ async def strands_agent_bedrock_streaming(payload, context):
     debug = payload.get("debug", False)  # Add debug parameter, default to False
     logger.info(f"Received user message: {user_message}, debug mode: {debug}")
 
-    print("=== Runtime Context Information ===")
-    print("Runtime Session ID:", context.session_id)
-    print("Context Object Type:", type(context))
-    print("User input:", user_message)
-    print("Debug mode:", debug)
-    print("=== End Context Information ===")
+    logger.info("=== Runtime Context Information ===")
+    logger.info(f"Runtime Session ID: {context.session_id}")
+    logger.info(f"Context Object Type: {type(context)}")
+    logger.info(f"User input: {user_message}")
+    logger.info(f"Debug mode: {debug}")
+    logger.info("=== End Context Information ===")
 
     # Ensure agent is initialized
     logger.info("Checking agent initialization...")
