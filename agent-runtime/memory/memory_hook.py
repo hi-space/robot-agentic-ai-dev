@@ -2,6 +2,9 @@ from bedrock_agentcore.memory import MemoryClient
 from strands.hooks.events import AgentInitializedEvent, MessageAddedEvent
 from strands.hooks.registry import HookProvider, HookRegistry
 import copy
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryHook(HookProvider):
@@ -49,7 +52,7 @@ class MemoryHook(HookProvider):
                 event.agent.messages = context_messages
 
         except Exception as e:
-            print(f"Memory load error: {e}")
+            logger.error(f"Memory load error: {e}")
 
     def _add_context_user_query(
         self, namespace: str, query: str, init_content: str, event: MessageAddedEvent
