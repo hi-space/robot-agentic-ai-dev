@@ -2,10 +2,12 @@ import os
 import boto3
 import requests
 import json
+import logging
 from dotenv import load_dotenv
 from bedrock_agentcore.identity.auth import requires_access_token
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 def get_bearer_token_from_secret_manager():
     """
@@ -16,10 +18,10 @@ def get_bearer_token_from_secret_manager():
         region = os.getenv("AWS_REGION", "us-east-1")
         
         if not secret_name:
-            print("No SECRET_NAME environment variable found")
+            logger.info("No SECRET_NAME environment variable found")
             return None
             
-        print(f"Debug - Getting bearer token from secret: {secret_name}")
+        logger.info(f"Debug - Getting bearer token from secret: {secret_name}")
         
         session = boto3.Session()
         client = session.client('secretsmanager', region_name=region)
@@ -29,14 +31,14 @@ def get_bearer_token_from_secret_manager():
         token_data = json.loads(bearer_token_raw)        
         if 'bearer_token' in token_data:
             bearer_token = token_data['bearer_token']
-            print("Successfully retrieved bearer token from secret manager")
+            logger.info("Successfully retrieved bearer token from secret manager")
             return bearer_token
         else:
-            print("No bearer token found in secret manager")
+            logger.info("No bearer token found in secret manager")
             return None
     
     except Exception as e:
-        print(f"Error getting stored token from secret manager: {e}")
+        logger.info(f"Error getting stored token from secret manager: {e}")
         return None
 
 def save_bearer_token_to_secret_manager(bearer_token):
@@ -48,10 +50,10 @@ def save_bearer_token_to_secret_manager(bearer_token):
         region = os.getenv("AWS_REGION", "us-east-1")
         
         if not secret_name:
-            print("No SECRET_NAME environment variable found, cannot save token")
+            logger.info("No SECRET_NAME environment variable found, cannot save token")
             return False
             
-        print(f"Debug - Saving bearer token to secret: {secret_name}")
+        logger.info(f"Debug - Saving bearer token to secret: {secret_name}")
         
         session = boto3.Session()
         client = session.client('secretsmanager', region_name=region)
@@ -73,7 +75,7 @@ def save_bearer_token_to_secret_manager(bearer_token):
                 SecretId=secret_name,
                 SecretString=secret_string
             )
-            print(f"Bearer token updated in secret manager with key: {secret_value['bearer_key']}")
+            logger.info(f"Bearer token updated in secret manager with key: {secret_value['bearer_key']}")
         except client.exceptions.ResourceNotFoundException:
             # Secret doesn't exist, create it
             client.create_secret(
@@ -81,12 +83,12 @@ def save_bearer_token_to_secret_manager(bearer_token):
                 SecretString=secret_string,
                 Description="MCP Server Cognito credentials with bearer key and token"
             )
-            print(f"Bearer token created in secret manager with key: {secret_value['bearer_key']}")
+            logger.info(f"Bearer token created in secret manager with key: {secret_value['bearer_key']}")
             
         return True
             
     except Exception as e:
-        print(f"Error saving bearer token to secret manager: {e}")
+        logger.info(f"Error saving bearer token to secret manager: {e}")
         return False
 
 def refresh_bearer_token_if_needed(bearer_token, test_url=None):
@@ -100,7 +102,7 @@ def refresh_bearer_token_if_needed(bearer_token, test_url=None):
         return bearer_token
     
     try:
-        print("Testing bearer token validity...")
+        logger.info("Testing bearer token validity...")
         headers = {
             "Authorization": f"Bearer {bearer_token}",
             "Content-Type": "application/json",
@@ -130,25 +132,25 @@ def refresh_bearer_token_if_needed(bearer_token, test_url=None):
         )
         
         if response.status_code == 200:
-            print("Bearer token is valid")
+            logger.info("Bearer token is valid")
             return bearer_token
         elif response.status_code == 403 or "Invalid Bearer token" in response.text:
-            print("Bearer token is expired or invalid, getting fresh token...")
+            logger.info("Bearer token is expired or invalid, getting fresh token...")
             # Get fresh token from Cognito
             fresh_token = get_cognito_token_direct()
             if fresh_token:
-                print("Successfully obtained fresh token, updating secret manager...")
+                logger.info("Successfully obtained fresh token, updating secret manager...")
                 save_bearer_token_to_secret_manager(fresh_token)
                 return fresh_token
             else:
-                print("Failed to get fresh token from Cognito")
+                logger.info("Failed to get fresh token from Cognito")
                 return bearer_token
         else:
-            print(f"Unexpected response status: {response.status_code}")
+            logger.info(f"Unexpected response status: {response.status_code}")
             return bearer_token
             
     except Exception as e:
-        print(f"Error testing bearer token: {e}")
+        logger.info(f"Error testing bearer token: {e}")
         return bearer_token
 
 def make_authenticated_request(url, headers=None, data=None, method="POST", timeout=30, max_retries=1):
@@ -173,7 +175,7 @@ def make_authenticated_request(url, headers=None, data=None, method="POST", time
     
     for attempt in range(max_retries + 1):
         try:
-            print(f"Making authenticated request (attempt {attempt + 1}/{max_retries + 1})...")
+            logger.info(f"Making authenticated request (attempt {attempt + 1}/{max_retries + 1})...")
             
             if method.upper() == "POST":
                 response = requests.post(url, headers=headers, data=data, timeout=timeout)
@@ -183,36 +185,36 @@ def make_authenticated_request(url, headers=None, data=None, method="POST", time
                 raise ValueError(f"Unsupported HTTP method: {method}")
             
             if response.status_code == 200:
-                print("Request successful!")
+                logger.info("Request successful!")
                 return response
             elif response.status_code == 403 or "Invalid Bearer token" in response.text:
-                print(f"403 Forbidden - Token may be expired (attempt {attempt + 1})")
+                logger.info(f"403 Forbidden - Token may be expired (attempt {attempt + 1})")
                 
                 if attempt < max_retries:
-                    print("Getting fresh token from Cognito...")
+                    logger.info("Getting fresh token from Cognito...")
                     fresh_token = get_cognito_token_direct()
                     if fresh_token:
-                        print("Successfully obtained fresh token, updating headers and retrying...")
+                        logger.info("Successfully obtained fresh token, updating headers and retrying...")
                         # Update headers with fresh token
                         headers["Authorization"] = f"Bearer {fresh_token}"
                         # Save the fresh token
                         save_bearer_token_to_secret_manager(fresh_token)
                         continue
                     else:
-                        print("Failed to get fresh token from Cognito")
+                        logger.info("Failed to get fresh token from Cognito")
                         break
                 else:
-                    print("Max retries reached, giving up")
+                    logger.info("Max retries reached, giving up")
                     break
             else:
-                print(f"Unexpected response status: {response.status_code}")
-                print(f"Response body: {response.text}")
+                logger.info(f"Unexpected response status: {response.status_code}")
+                logger.info(f"Response body: {response.text}")
                 break
                 
         except Exception as e:
-            print(f"Request failed: {e}")
+            logger.info(f"Request failed: {e}")
             if attempt < max_retries:
-                print(f"Retrying... (attempt {attempt + 2}/{max_retries + 1})")
+                logger.info(f"Retrying... (attempt {attempt + 2}/{max_retries + 1})")
                 continue
             else:
                 raise e
@@ -231,10 +233,10 @@ def get_cognito_token_direct():
         password = os.getenv("COGNITO_PASSWORD")
         region = os.getenv("AWS_REGION", "us-east-1")
         
-        print(f"Debug - Client ID: {client_id}")
-        print(f"Debug - Username: {username}")
-        print(f"Debug - Password: {'***' if password else 'None'}")
-        print(f"Debug - Region: {region}")
+        logger.info(f"Debug - Client ID: {client_id}")
+        logger.info(f"Debug - Username: {username}")
+        logger.info(f"Debug - Password: {'***' if password else 'None'}")
+        logger.info(f"Debug - Region: {region}")
         
         if not all([client_id, username, password]):
             missing = []
@@ -246,7 +248,7 @@ def get_cognito_token_direct():
         # Create Cognito client using AWS SDK (like GitHub code)
         client = boto3.client('cognito-idp', region_name=region)
         
-        print("Debug - Making Cognito authentication request...")
+        logger.info("Debug - Making Cognito authentication request...")
         # Authenticate and get tokens using USER_PASSWORD_AUTH flow
         response = client.initiate_auth(
             ClientId=client_id,
@@ -256,17 +258,16 @@ def get_cognito_token_direct():
                 'PASSWORD': password
             }
         )
-        
-        print(f"Debug - Authentication response received")
+        logger.info(f"Debug - Authentication response received")
         auth_result = response['AuthenticationResult']
         access_token = auth_result['AccessToken']
         
-        print(f"Debug - Access token received: {'Yes' if access_token else 'No'}")
-        print("Successfully obtained fresh Cognito tokens")
+        logger.info(f"Debug - Access token received: {'Yes' if access_token else 'No'}")
+        logger.info("Successfully obtained fresh Cognito tokens")
         return access_token
         
     except Exception as e:
-        print(f"Error getting Cognito token directly: {e}")
+        logger.info(f"Error getting Cognito token directly: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -280,7 +281,7 @@ def get_gateway_access_token_bedrock(access_token: str):
     """
     Bedrock AgentCore token retrieval (works when workload identity is set)
     """
-    print(f"Access Token from Bedrock AgentCore: {access_token}")
+    logger.info(f"Access Token from Bedrock AgentCore: {access_token}")
     return access_token
 
 def get_gateway_access_token():
@@ -295,27 +296,27 @@ def get_gateway_access_token():
     # First check if we have a token in environment variable (for Docker)
     jwt_token = os.getenv("BEARER_TOKEN")
     if jwt_token:
-        print("Using bearer token from environment variable")
+        logger.info("Using bearer token from environment variable")
         # Even with env token, test if it's still valid
         jwt_token = refresh_bearer_token_if_needed(jwt_token)
         return jwt_token
     
     # Check secret manager for stored token
-    print("Checking secret manager for stored bearer token...")
+    logger.info("Checking secret manager for stored bearer token...")
     bearer_token = get_bearer_token_from_secret_manager()
     
     if bearer_token:
-        print("Found bearer token in secret manager")
+        logger.info("Found bearer token in secret manager")
         # Test if the token is still valid and refresh if needed
         bearer_token = refresh_bearer_token_if_needed(bearer_token)
         return bearer_token
     
     # No token in secret manager, try to get fresh token from Cognito
-    print("No bearer token found in secret manager, getting fresh bearer token from Cognito...")
+    logger.info("No bearer token found in secret manager, getting fresh bearer token from Cognito...")
     
     try:
         # Try bedrock_agentcore method first
-        print("Trying bedrock_agentcore authentication...")
+        logger.info("Trying bedrock_agentcore authentication...")
         token = get_gateway_access_token_bedrock()
         if token:
             # Save the token to secret manager
@@ -323,17 +324,17 @@ def get_gateway_access_token():
             return token
     except ValueError as e:
         if "Workload access token has not been set" in str(e):
-            print("Workload access token not available, falling back to direct Cognito authentication...")
+            logger.info("Workload access token not available, falling back to direct Cognito authentication...")
         else:
             raise e
     except Exception as e:
-        print(f"Error with bedrock_agentcore authentication: {e}")
+        logger.info(f"Error with bedrock_agentcore authentication: {e}")
     
     # Fall back to direct Cognito token retrieval
-    print("Falling back to direct Cognito authentication...")
+    logger.info("Falling back to direct Cognito authentication...")
     token = get_cognito_token_direct()
     if token:
-        print("Successfully obtained token via direct Cognito authentication")
+        logger.info("Successfully obtained token via direct Cognito authentication")
         # Save the fresh token to secret manager
         save_bearer_token_to_secret_manager(token)
         return token
@@ -350,9 +351,9 @@ def get_gateway_access_token_with_retry(max_retries=2):
             if token:
                 return token
         except Exception as e:
-            print(f"Attempt {attempt + 1} failed: {e}")
+            logger.info(f"Attempt {attempt + 1} failed: {e}")
             if attempt < max_retries:
-                print(f"Retrying token retrieval... (attempt {attempt + 2}/{max_retries + 1})")
+                logger.info(f"Retrying token retrieval... (attempt {attempt + 2}/{max_retries + 1})")
                 continue
             else:
                 raise e
@@ -368,7 +369,7 @@ def load_tools_from_mcp_with_retry(gateway_endpoint, max_retries=2):
     
     for attempt in range(max_retries + 1):
         try:
-            print(f"Loading MCP tools attempt {attempt + 1}/{max_retries + 1}")
+            logger.info(f"Loading MCP tools attempt {attempt + 1}/{max_retries + 1}")
             
             # Get current token
             jwt_token = get_gateway_access_token_with_retry(max_retries=1)
@@ -376,7 +377,7 @@ def load_tools_from_mcp_with_retry(gateway_endpoint, max_retries=2):
                 raise Exception("Failed to obtain bearer token")
             
             # Test token validity first with a simple request
-            print("Testing token validity before MCP connection...")
+            logger.info("Testing token validity before MCP connection...")
             test_headers = {
                 "Authorization": f"Bearer {jwt_token}",
                 "Content-Type": "application/json",
@@ -405,13 +406,13 @@ def load_tools_from_mcp_with_retry(gateway_endpoint, max_retries=2):
                 timeout=30
             )
             
-            print(f"Token test response status: {test_response.status_code}")
+            logger.info(f"Token test response status: {test_response.status_code}")
             if test_response.status_code != 200:
-                print(f"Token test failed: {test_response.text}")
+                logger.info(f"Token test failed: {test_response.text}")
                 if test_response.status_code in [401, 403]:
                     raise Exception(f"Token authentication failed: {test_response.status_code}")
             
-            print("Token is valid, proceeding with MCP connection...")
+            logger.info("Token is valid, proceeding with MCP connection...")
             
             headers = {"Authorization": f"Bearer {jwt_token}"}
             
@@ -426,13 +427,13 @@ def load_tools_from_mcp_with_retry(gateway_endpoint, max_retries=2):
             
             # Get tools
             tools = mcp_client.list_tools_sync()
-            print(f"Successfully loaded {len(tools)} tools from MCP server")
+            logger.info(f"Successfully loaded {len(tools)} tools from MCP server")
             
             return tools, mcp_client
             
         except Exception as e:
             error_msg = str(e)
-            print(f"MCP tools loading attempt {attempt + 1} failed: {error_msg}")
+            logger.info(f"MCP tools loading attempt {attempt + 1} failed: {error_msg}")
             
             # Check if it's a token-related error
             if ("401" in error_msg or "403" in error_msg or "Forbidden" in error_msg or 
@@ -440,29 +441,29 @@ def load_tools_from_mcp_with_retry(gateway_endpoint, max_retries=2):
                 "Token authentication failed" in error_msg):
                 
                 if attempt < max_retries:
-                    print("Token may be expired, getting fresh token and retrying...")
+                    logger.info("Token may be expired, getting fresh token and retrying...")
                     try:
                         # Force refresh token by getting new one directly from Cognito
                         fresh_token = get_cognito_token_direct()
                         if fresh_token:
                             save_bearer_token_to_secret_manager(fresh_token)
-                            print("Fresh token obtained and saved, retrying...")
+                            logger.info("Fresh token obtained and saved, retrying...")
                             continue
                         else:
-                            print("Failed to get fresh token")
+                            logger.info("Failed to get fresh token")
                             break
                     except Exception as token_error:
-                        print(f"Error getting fresh token: {token_error}")
+                        logger.info(f"Error getting fresh token: {token_error}")
                         break
                 else:
-                    print("Max retries reached for token refresh")
+                    logger.info("Max retries reached for token refresh")
                     break
             else:
                 # Non-token related error, don't retry
-                print(f"Non-token related error, not retrying: {error_msg}")
+                logger.info(f"Non-token related error, not retrying: {error_msg}")
                 break
     
-    print("Failed to load tools from MCP server after all attempts")
+    logger.info("Failed to load tools from MCP server after all attempts")
     return None, None
 
 # Usage examples:
@@ -487,14 +488,14 @@ def load_tools_from_mcp_with_retry(gateway_endpoint, max_retries=2):
 
 if __name__ == "__main__":
     token = get_gateway_access_token()
-    print(f"Final token: {token}")
+    logger.info(f"Final token: {token}")
     
     # Test MCP tools loading
     gateway_endpoint = os.getenv("gateway_endpoint") or os.getenv("GATEWAY_URL")
     if gateway_endpoint:
-        print(f"Testing MCP tools loading from: {gateway_endpoint}")
+        logger.info(f"Testing MCP tools loading from: {gateway_endpoint}")
         tools, mcp_client = load_tools_from_mcp_with_retry(gateway_endpoint)
         if tools:
-            print(f"Successfully loaded {len(tools)} tools")
+            logger.info(f"Successfully loaded {len(tools)} tools")
         else:
-            print("Failed to load tools")
+            logger.info("Failed to load tools")
