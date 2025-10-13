@@ -18,9 +18,14 @@ class AgentManager:
         self.logger = logging.getLogger(__name__)
         self.agent: Optional[Agent] = None
         self.mcp_client: Optional[Any] = None
+        self.sitewise_mcp_client: Optional[Any] = None
     
     def initialize(self, debug: bool = False) -> bool:
-        """Initialize the agent with MCP tools and local tools"""
+        """Initialize the agent with MCP tools and local tools
+        
+        Args:
+            debug: If True, skip MCP server integration and use only local tools
+        """
         try:
             self.logger.info(f"Starting agent initialization... (debug mode: {debug})")
             
@@ -36,21 +41,43 @@ class AgentManager:
                 self.logger.info("Debug mode: Skipping MCP tool integration, using only local tools")
                 all_tools = local_tools
                 mcp_client = None
+                sitewise_mcp_client = None
             else:
-                # Load tools from MCP server
+                # Load tools from Bedrock AgentCore Gateway MCP server
                 mcp_tools, mcp_client = self.mcp_manager.load_tools()
                 if not mcp_tools or not mcp_client:
                     self.logger.error("Failed to load tools from MCP server")
                     return False
                 
-                # Combine MCP tools and local tools
                 all_tools = mcp_tools + local_tools
-                self.logger.info(f"Loaded {len(mcp_tools)} MCP tools and {len(local_tools)} local tools")
+                self.logger.info(f"Loaded {len(mcp_tools)} AgentCore MCP tools and {len(local_tools)} local tools")
+                
+                # Load IoT SiteWise MCP tools
+                sitewise_mcp_client = None
+                try:
+                    self.logger.info("Loading IoT SiteWise MCP tools...")
+                    sitewise_mcp_client = self.mcp_manager.create_sitewise_mcp_client(
+                        aws_region="ap-northeast-2",
+                        log_level="ERROR",
+                        allow_writes=False
+                    )
+                    
+                    # Load tools within context manager
+                    with sitewise_mcp_client:
+                        sitewise_tools = sitewise_mcp_client.list_tools_sync()
+                        all_tools = all_tools + sitewise_tools
+                        self.logger.info(f"Loaded {len(sitewise_tools)} IoT SiteWise MCP tools")
+                    
+                except Exception as e:
+                    self.logger.warning(f"Failed to load IoT SiteWise MCP tools: {e}")
+                    self.logger.warning("Continuing without IoT SiteWise tools...")
+                    sitewise_mcp_client = None
             
             # Create the agent
             if self._create_agent(all_tools):
                 self.mcp_client = mcp_client
-                self.logger.info(f"Agent initialized successfully (debug mode: {debug})")
+                self.sitewise_mcp_client = sitewise_mcp_client
+                self.logger.info(f"Agent initialized successfully with {len(all_tools)} total tools")
                 return True
             else:
                 return False
@@ -82,10 +109,11 @@ class AgentManager:
     def is_initialized(self, debug: bool = False) -> bool:
         """Check if agent is properly initialized"""
         if debug:
-            # In debug mode, only check if agent exists (MCP client not required)
+            # In debug mode, only check if agent exists (MCP clients not required)
             return self.agent is not None
         else:
-            # In normal mode, both agent and MCP client must exist
+            # In normal mode, agent and AgentCore MCP client must exist
+            # SiteWise MCP client may fail to load but agent can still function
             return self.agent is not None and self.mcp_client is not None
     
     def get_agent(self) -> Optional[Agent]:
@@ -93,8 +121,12 @@ class AgentManager:
         return self.agent
     
     def get_mcp_client(self) -> Optional[Any]:
-        """Get the MCP client"""
+        """Get the Bedrock AgentCore Gateway MCP client"""
         return self.mcp_client
+    
+    def get_sitewise_mcp_client(self) -> Optional[Any]:
+        """Get the IoT SiteWise MCP client (may be None if loading failed)"""
+        return self.sitewise_mcp_client
     
     def ensure_initialized(self, debug: bool = False) -> bool:
         """Ensure agent is initialized, attempt initialization if not"""
