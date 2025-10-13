@@ -11,6 +11,7 @@ import {
   Tooltip,
   Avatar,
   useTheme,
+  CircularProgress,
 } from '@mui/material'
 import {
   SmartToy as RobotIcon,
@@ -28,6 +29,8 @@ import {
 } from '@mui/icons-material'
 import { styled } from '@mui/material/styles'
 import JsonView from '@uiw/react-json-view'
+import { isValidS3Url, detectImageType } from '../lib/image-utils'
+import { S3Image } from './S3Image'
 
 // 타입 정의
 export interface StreamMessage {
@@ -227,19 +230,31 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
   }
 
   // 이미지와 메타데이터 추출 함수
-  const extractImageData = (data: any): Array<{ url: string, metadata: any }> => {
-    const imageData: Array<{ url: string, metadata: any }> = []
+  const extractImageData = (data: any): Array<{ s3Url: string, metadata: any }> => {
+    const imageData: Array<{ s3Url: string, metadata: any }> = []
 
     if (!data) return imageData
 
     const parsedData = parseJSONSafely(data)
 
-    // messages 배열에서 image_url과 메타데이터 추출
+    // filename 필드에서 S3 URL 추출 (detection/gesture tool 결과)
+    if (parsedData?.filename && isValidS3Url(parsedData.filename)) {
+      imageData.push({
+        s3Url: parsedData.filename,
+        metadata: {
+          timestamp: parsedData.timestamp,
+          results: parsedData.results,
+          imageType: detectImageType(parsedData.filename),
+        }
+      })
+    }
+
+    // 기존 방식 호환성 유지: messages 배열에서 image_url 추출
     if (parsedData?.messages && Array.isArray(parsedData.messages)) {
       parsedData.messages.forEach((msg: any) => {
         if (msg.image_url) {
           imageData.push({
-            url: msg.image_url,
+            s3Url: msg.image_url,
             metadata: {
               timestamp: msg.timestamp,
               results: msg.results,
@@ -371,19 +386,9 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
 
                 {/* 이미지 */}
                 <Box sx={{ p: 1 }}>
-                  <img
-                    src={item.url}
-                    alt={`Detection ${index + 1}`}
-                    style={{
-                      width: '100%',
-                      maxHeight: '400px',
-                      display: 'block',
-                      objectFit: 'contain',
-                    }}
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement
-                      target.style.display = 'none'
-                    }}
+                  <S3Image
+                    s3Url={item.s3Url}
+                    alt={`${item.metadata.imageType || 'Detection'} ${index + 1}`}
                   />
                 </Box>
               </Box>
