@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # Deploy script for Bedrock AgentCore Runtime using CLI commands
-# This script replaces the Python deploy.py with shell commands
 
 set -e  # Exit on any error
 
@@ -251,8 +250,15 @@ main() {
     # Check prerequisites
     check_prerequisites
     
-    # Configure the agent
-    configure_agent
+    # Configure the agent only if not already configured
+    if [[ -f ".bedrock_agentcore.yaml" ]]; then
+        print_status "Configuration already exists (.bedrock_agentcore.yaml found)"
+        print_status "Skipping configure step to preserve existing Dockerfile"
+        print_status "To reconfigure, delete .bedrock_agentcore.yaml and run again"
+    else
+        print_status "No existing configuration found, running configure..."
+        configure_agent
+    fi
     
     # Launch the agent
     launch_agent
