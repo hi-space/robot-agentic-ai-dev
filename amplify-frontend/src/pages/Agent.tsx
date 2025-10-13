@@ -262,7 +262,7 @@ export default function Dashboard() {
       hasInitialized.current = true
       addMessage({
         type: 'chunk',
-        data: '안녕하세요! Robot Agentic RoboDog 입니다. 무엇을 도와드릴까요?',
+        data: '안녕하세요! Agentic RoboDog 입니다. 무엇을 도와드릴까요?',
         isUser: false,
       })
     }
