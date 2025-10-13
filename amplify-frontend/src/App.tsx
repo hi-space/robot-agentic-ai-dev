@@ -22,11 +22,11 @@ function App() {
     const initializeApp = async () => {
       try {
         console.log('앱 초기화 시작...')
-        
+
         // 환경 설정 초기화
         await initializeEnvConfig()
         console.log('환경 설정 초기화 완료')
-        
+
         // Cognito 인증 상태 확인
         try {
           const { fetchAuthSession } = await import('aws-amplify/auth')
@@ -39,7 +39,7 @@ function App() {
         } catch (authError) {
           console.log('인증되지 않은 상태 - 로그인 필요')
         }
-        
+
         setIsInitialized(true)
         console.log('앱 초기화 완료')
       } catch (error) {
@@ -79,7 +79,7 @@ function App() {
           `,
           animation: 'float 6s ease-in-out infinite'
         }} />
-        
+
         {/* 로고 */}
         <div style={{
           position: 'relative',
@@ -87,10 +87,10 @@ function App() {
           marginBottom: '2rem',
           animation: 'pulse 2s ease-in-out infinite'
         }}>
-          <img 
+          <img
             className="logo"
-            src="/logo.png" 
-            alt="Robot Agentic AI Logo" 
+            src="/logo.png"
+            alt="Robot Agentic AI Logo"
             style={{
               width: '120px',
               height: '120px',
@@ -99,7 +99,7 @@ function App() {
             }}
           />
         </div>
-        
+
         {/* 프로젝트 제목 */}
         <div style={{
           position: 'relative',
@@ -130,7 +130,7 @@ function App() {
             Agentic Robot Control System
           </p>
         </div>
-        
+
         {/* 로딩 인디케이터 */}
         <div style={{
           position: 'relative',
@@ -169,7 +169,7 @@ function App() {
               animationDelay: '-0.32s'
             }} />
           </div>
-          
+
           <p className="loading-text" style={{
             fontSize: '1rem',
             margin: '0',
@@ -180,7 +180,7 @@ function App() {
             앱을 초기화하는 중...
           </p>
         </div>
-        
+
         {/* 하단 정보 */}
         <div style={{
           position: 'absolute',
@@ -199,7 +199,7 @@ function App() {
             AWS Bedrock • AgentCore • IoT Core
           </p>
         </div>
-        
+
         {/* CSS 애니메이션 */}
         <style>{`
           @keyframes pulse {
