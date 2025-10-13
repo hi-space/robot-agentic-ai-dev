@@ -1,4 +1,9 @@
-# robot-agentic-ai
+# Agentic RoboDog 
+
+COEX seoul에서 10월 14-16까지 진행되는 AWS Industry Week에서 진행되는 Agentic RoboDog에 대한 Repository입니다. 주요 Architecture는 아래를 참조하세요.
+
+<img width="800" alt="architecture" src="https://github.com/user-attachments/assets/69446a72-437b-4f60-9b9f-941d93aa8585" />
+
 
 
 ## Robot AgentCore Gateway
