@@ -11,43 +11,8 @@ from utils.s3_util import download_image_from_s3
 logger = logging.getLogger(__name__)
 
 
-def _add_presigned_urls_to_messages(result: Dict[str, Any]) -> Dict[str, Any]:
-    """Helper function to add presigned URLs to messages containing S3 paths.
-    
-    Args:
-        result: Dictionary containing messages with S3 file paths
-        
-    Returns:
-        Updated dictionary with presigned URLs added to messages
-    """
-    if "messages" not in result:
-        return result
-    
-    try:
-        s3_client = boto3.client('s3', region_name='ap-northeast-2')
-        
-        for msg in result["messages"]:
-            if "filename" in msg and msg["filename"].startswith("s3://"):
-                try:
-                    # Extract bucket and key from S3 path
-                    s3_path = msg["filename"].replace("s3://", "")
-                    parts = s3_path.split("/", 1)
-                    if len(parts) == 2:
-                        bucket, key = parts
-                        # Generate presigned URL (valid for 1 hour)
-                        presigned_url = s3_client.generate_presigned_url(
-                            'get_object',
-                            Params={'Bucket': bucket, 'Key': key},
-                            ExpiresIn=3600
-                        )
-                        msg["image_url"] = presigned_url
-                except Exception as e:
-                    logger.warning(f"Error generating presigned URL for {msg['filename']}: {e}")
-                    # Continue without image URL if generation fails
-    except Exception as e:
-        logger.error(f"Error creating S3 client: {e}")
-    
-    return result
+# Presigned URL generation removed - frontend will handle this directly
+# S3 URLs are now returned as-is for client-side presigned URL generation
 
 
 def _clear_queue(queue_name: str, config: dict, sqs_client=None) -> None:
@@ -129,7 +94,7 @@ def _get_fifo_messages(queue_name: str, config: dict) -> Dict[str, Any]:
     
     # Step 2: Wait for new messages ({max_attempts} seconds, check every 1 second)
     logger.info(f"Waiting for new messages from {queue_name} queue...")
-    max_attempts = 10
+    max_attempts = 5
     current_time = datetime.now()
     
     for attempt in range(max_attempts):
@@ -272,9 +237,62 @@ def get_robot_detection():
         if "error" in result:
             return result
         
-        # Add presigned image URLs to messages
-        result = _add_presigned_urls_to_messages(result)
+        # If no messages received, return mock data for testing
+        if result.get("status") == "no_messages":
+            logger.info("No detection messages received - returning mock data for testing")
+            current_timestamp = int(time.time())
+            
+            mock_messages = [
+                {
+                    "filename": "s3://industry-robot-detected-images/detected/20251013_173444-frame_01005.jpg",
+                    "timestamp": current_timestamp,
+                    "results": [
+                        {
+                            "class": "fire",
+                            "confidence": 0.89,
+                            "position": [320, 150, 680, 420],
+                            "risk_level": "HIGH"
+                        }
+                    ],
+                    "message_id": "mock_detection_1"
+                },
+                {
+                    "filename": "s3://industry-robot-detected-images/detected/20251013_173508-frame_01028.jpg",
+                    "timestamp": current_timestamp + 1,
+                    "results": [
+                        {
+                            "class": "fire",
+                            "confidence": 0.92,
+                            "position": [280, 180, 720, 450],
+                            "risk_level": "HIGH"
+                        }
+                    ],
+                    "message_id": "mock_detection_2"
+                },
+                {
+                    "filename": "s3://industry-robot-detected-images/detected/20251013_173515-frame_01035.jpg",
+                    "timestamp": current_timestamp + 2,
+                    "results": [
+                        {
+                            "class": "fire",
+                            "confidence": 0.87,
+                            "position": [350, 200, 650, 480],
+                            "risk_level": "HIGH"
+                        }
+                    ],
+                    "message_id": "mock_detection_3"
+                }
+            ]
+            
+            return {
+                "status": "success",
+                "message_count": 3,
+                "timestamp": datetime.now().isoformat(),
+                "messages": mock_messages,
+                "is_mock_data": True
+            }
         
+        # Return S3 URLs as-is - frontend will generate presigned URLs
         return result
         
     except Exception as e:
@@ -314,9 +332,7 @@ def get_robot_gesture():
         if "error" in result:
             return result
         
-        # Add presigned image URLs to messages
-        result = _add_presigned_urls_to_messages(result)
-        
+        # Return S3 URLs as-is - frontend will generate presigned URLs
         return result
         
     except Exception as e:
