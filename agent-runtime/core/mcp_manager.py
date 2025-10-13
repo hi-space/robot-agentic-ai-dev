@@ -4,6 +4,8 @@ import logging
 from auth import access_token
 from typing import Optional, Tuple, Any, Dict
 from config.config import Config
+from mcp import stdio_client, StdioServerParameters
+from strands.tools.mcp import MCPClient
 
 
 class MCPServerManager:
@@ -151,3 +153,41 @@ class MCPServerManager:
                 tool_names.append(f"Tool-{id(tool)}")
         
         self.logger.info(f"Available tools: {', '.join(tool_names)}")
+    
+    def create_sitewise_mcp_client(
+        self,
+        aws_region: str = "ap-northeast-2",
+        log_level: str = "ERROR",
+        allow_writes: bool = False
+    ) -> MCPClient:
+        """Create an MCP client for AWS IoT SiteWise
+        
+        Args:
+            aws_region: AWS region to use
+            log_level: FastMCP log level (DEBUG, INFO, WARNING, ERROR)
+            allow_writes: Whether to allow write operations (default: False for safety)
+            
+        Returns:
+            MCPClient instance configured for AWS IoT SiteWise
+            
+        Note:
+            When running in AgentCore Runtime, IAM role credentials are used automatically.
+            AWS_PROFILE is not needed in production environment.
+        """
+        env = {
+            "AWS_REGION": aws_region,
+            "FASTMCP_LOG_LEVEL": log_level,
+        }
+        
+        if allow_writes:
+            env["SITEWISE_MCP_ALLOW_WRITES"] = "True"
+        
+        return MCPClient(
+            lambda: stdio_client(
+                StdioServerParameters(
+                    command="uvx",
+                    args=["awslabs.aws-iot-sitewise-mcp-server@latest"],
+                    env=env
+                )
+            )
+        )
