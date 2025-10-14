@@ -229,6 +229,17 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
     return data
   }
 
+  // 텍스트에서 S3 URL 추출 함수
+  const extractS3UrlsFromText = (text: string): string[] => {
+    if (!text) return []
+
+    // s3:// 형식의 URL 찾기
+    const s3UrlRegex = /s3:\/\/[a-zA-Z0-9\-._/]+\.(jpg|jpeg|png|gif|webp)/gi
+    const matches = text.match(s3UrlRegex)
+
+    return matches ? matches.filter(url => isValidS3Url(url)) : []
+  }
+
   // 이미지와 메타데이터 추출 함수
   const extractImageData = (data: any): Array<{ s3Url: string, metadata: any }> => {
     const imageData: Array<{ s3Url: string, metadata: any }> = []
@@ -262,6 +273,19 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
             }
           })
         }
+      })
+    }
+
+    // 텍스트에서 S3 URL 추출 (AI 응답에서)
+    if (typeof data === 'string') {
+      const urls = extractS3UrlsFromText(data)
+      urls.forEach(url => {
+        imageData.push({
+          s3Url: url,
+          metadata: {
+            imageType: detectImageType(url),
+          }
+        })
       })
     }
 
@@ -475,6 +499,11 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
 
   // 메인 컨텐츠 렌더링
   const renderContent = () => {
+    // 텍스트에서 이미지 추출 (chunk와 complete 타입에서)
+    const imageData = (message.type === 'chunk' || message.type === 'complete')
+      ? extractImageData(displayText)
+      : []
+
     switch (message.type) {
       case 'tool_use':
         return renderToolUse()
@@ -495,22 +524,75 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
             >
               {displayText}
             </StreamingText>
+
+            {/* 이미지 렌더링 */}
+            {imageData.length > 0 && (
+              <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {imageData.map((item, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      border: '1px solid rgba(226, 232, 240, 0.8)',
+                      background: 'white',
+                    }}
+                  >
+                    <Box sx={{ p: 1 }}>
+                      <S3Image
+                        s3Url={item.s3Url}
+                        alt={`${item.metadata.imageType || 'Detection'} ${index + 1}`}
+                      />
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            )}
+
             {renderComplete()}
           </Box>
         )
       case 'chunk':
       default:
         return (
-          <StreamingText
-            variant="body1"
-            sx={{
-              lineHeight: 1.5,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word'
-            }}
-          >
-            {displayText}
-          </StreamingText>
+          <Box>
+            <StreamingText
+              variant="body1"
+              sx={{
+                lineHeight: 1.5,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word'
+              }}
+            >
+              {displayText}
+            </StreamingText>
+
+            {/* 이미지 렌더링 */}
+            {imageData.length > 0 && (
+              <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {imageData.map((item, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      border: '1px solid rgba(226, 232, 240, 0.8)',
+                      background: 'white',
+                    }}
+                  >
+                    <Box sx={{ p: 1 }}>
+                      <S3Image
+                        s3Url={item.s3Url}
+                        alt={`${item.metadata.imageType || 'Detection'} ${index + 1}`}
+                      />
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
         )
     }
   }
