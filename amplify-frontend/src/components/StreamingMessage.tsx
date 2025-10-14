@@ -233,8 +233,9 @@ function StreamingMessage({ message, isUser, onUpdate, onTTSPlay, onTTSPause, on
   const extractS3UrlsFromText = (text: string): string[] => {
     if (!text) return []
 
-    // s3:// 형식의 URL 찾기
-    const s3UrlRegex = /s3:\/\/[a-zA-Z0-9\-._/]+\.(jpg|jpeg|png|gif|webp)/gi
+    // s3:// 형식의 URL 찾기 (특수문자 포함)
+    // 공백, 줄바꿈, 따옴표, 괄호 등으로 구분되는 S3 URL 매칭
+    const s3UrlRegex = /s3:\/\/[^\s"'<>()[\]{}]+\.(jpg|jpeg|png|gif|webp)/gi
     const matches = text.match(s3UrlRegex)
 
     return matches ? matches.filter(url => isValidS3Url(url)) : []
