@@ -288,8 +288,7 @@ def get_robot_detection():
                 "status": "success",
                 "message_count": 3,
                 "timestamp": datetime.now().isoformat(),
-                "messages": mock_messages,
-                "is_mock_data": True
+                "messages": mock_messages
             }
         
         # Return S3 URLs as-is - frontend will generate presigned URLs
