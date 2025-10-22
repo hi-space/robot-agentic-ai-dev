@@ -60,13 +60,13 @@ def command_robot(action: str, message: str, debug: bool = False) -> str:
                         
     print('topic: ', topic)
 
-    # Debug 모드인 경우 MQTT publish를 건너뛰고 시뮬레이션만 수행
+    # Skip MQTT publish and perform simulation only in debug mode
     if debug:
         print('DEBUG MODE: MQTT publish를 건너뛰고 시뮬레이션만 수행합니다.')
         print('Simulated payload: ', payload)
         return True
 
-    # Debug 모드가 아닌 경우 실제 MQTT publish 수행
+    # Perform actual MQTT publish if not in debug mode
     try:
         client = boto3.client(
             'iot-data',
@@ -94,7 +94,7 @@ def lambda_handler(event, context):
     print(f"action: {action}")
     message = event.get('message')
     print(f"message: {message}")
-    debug = event.get('debug', False)  # debug 파라미터 추가, 기본값 False
+    debug = event.get('debug', False)  # Add debug parameter, default value is False
     print(f"debug: {debug}")
 
     result = command_robot(action, message, debug)
