@@ -365,7 +365,9 @@ def load_tools_from_mcp_with_retry(gateway_endpoint, max_retries=2):
     Load tools from MCP server with automatic token refresh on failure
     """
     from strands.tools.mcp import MCPClient
-    from mcp.client.streamable_http import streamablehttp_client
+    from mcp.client.streamable_http import streamable_http_client
+    from mcp.shared._httpx_utils import create_mcp_http_client
+    import contextlib
     
     for attempt in range(max_retries + 1):
         try:
@@ -417,10 +419,17 @@ def load_tools_from_mcp_with_retry(gateway_endpoint, max_retries=2):
             headers = {"Authorization": f"Bearer {jwt_token}"}
             
             # Create MCP client
-            mcp_client = MCPClient(lambda: streamablehttp_client(
-                url=f"{gateway_endpoint}/mcp",
-                headers=headers
-            ))
+            @contextlib.asynccontextmanager
+            async def _http_mcp():
+                client = create_mcp_http_client(headers=headers)
+                async with client:
+                    async with streamable_http_client(
+                        f"{gateway_endpoint}/mcp",
+                        http_client=client,
+                    ) as streams:
+                        yield streams
+
+            mcp_client = MCPClient(_http_mcp)
             
             # Enter context manager
             mcp_client.__enter__()
